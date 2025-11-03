@@ -5,6 +5,7 @@
 <title>Wind Border Marker</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="author" content="Rokasarts">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>💥</text></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -92,34 +93,46 @@
   }
 
   input[type=range]{
-    flex:1;height:6px;border-radius:3px;background:var(--border);
-    outline:none;appearance:none;position:relative
+    position:absolute;top:0;left:0;width:100%;height:6px;border-radius:3px;background:transparent;
+    outline:none;appearance:none;z-index:2;
   }
-  input[type=range]::before{
-    content:'';
-    position:absolute;top:0;left:0;height:100%;
-    width:var(--load-w, 0%);
-    background:var(--color-red);
-    border-radius:3px;pointer-events:none;
-    opacity:0;
-    transition:
-      width .25s ease,
-      background-color .6s ease,
-      opacity .6s ease;
+
+  .slider-container{
+    flex:1;position:relative;height:6px;background:var(--border);border-radius:3px;
   }
-  input[type=range].loading::before{ opacity:1; }
-  input[type=range].loaded::before{
+  
+  .loading-bar{
+    position:absolute;top:0;left:0;height:100%;width:0%;
+    background:var(--color-red);border-radius:3px;pointer-events:none;
+    opacity:0;transition:width .4s ease-out, background-color .6s ease, opacity .6s ease;
+    z-index:1;
+  }
+  
+  .slider-container.loading .loading-bar{
+    opacity:1;
+  }
+  
+  .slider-container.loaded .loading-bar{
     background:var(--color-gray-300);
     opacity:.7;
   }
 
   input[type=range]::-webkit-slider-thumb{
     appearance:none;width:18px;height:18px;border-radius:50%;
-    background:var(--color-red);cursor:pointer;box-shadow:0 2px 6px rgba(255,59,48,.4);transition:transform .2s;position:relative;z-index:10
+    background:var(--color-red);cursor:pointer;box-shadow:0 2px 6px rgba(255,59,48,.4);
+    transition:transform .2s;position:relative;z-index:10;
+    margin-top:-6px;
   }
   input[type=range]::-moz-range-thumb{
     width:18px;height:18px;border-radius:50%;background:var(--color-red);
-    cursor:pointer;border:none;box-shadow:0 2px 6px rgba(255,59,48,.4);transition:transform .2s;position:relative;z-index:10
+    cursor:pointer;border:none;box-shadow:0 2px 6px rgba(255,59,48,.4);
+    transition:transform .2s;position:relative;z-index:10;
+  }
+  input[type=range]::-webkit-slider-runnable-track{
+    width:100%;height:6px;cursor:pointer;background:transparent;border-radius:3px;
+  }
+  input[type=range]::-moz-range-track{
+    width:100%;height:6px;cursor:pointer;background:transparent;border-radius:3px;
   }
   input[type=range]:hover::-webkit-slider-thumb{transform:scale(1.1)}
   input[type=range]:hover::-moz-range-thumb{transform:scale(1.1)}
@@ -224,7 +237,10 @@
 
   <div class="time-control">
     <span class="time-display" id="timeDisplay" aria-live="polite">12:00</span>
-    <input type="range" min="0" max="23" step="1" value="0" id="hourSlider" aria-label="Hour of day">
+    <div class="slider-container" id="sliderContainer">
+      <div class="loading-bar" id="loadingBar"></div>
+      <input type="range" min="0" max="23" step="1" value="0" id="hourSlider" aria-label="Hour of day">
+    </div>
   </div>
 </div>
 
@@ -283,7 +299,9 @@ const elements = {
   infoPanel: document.getElementById('infoPanel'),
   infoToggle: document.getElementById('infoToggle'),
   windTooltip: document.getElementById('windTooltip'),
-  offlineHint: document.getElementById('offlineHint')
+  offlineHint: document.getElementById('offlineHint'),
+  sliderContainer: document.getElementById('sliderContainer'),
+  loadingBar: document.getElementById('loadingBar')
 };
 
 /* ==================== MAP ==================== */
@@ -745,7 +763,7 @@ particleLayer.setVectorGetter((lat,lon)=>getVectorAtSelectedHour(lat,lon));
 /* ==================== TIME ==================== */
 function buildDateDropdownFromData(firstWind){
   elements.dateSelect.innerHTML = '';
-  const fmt = new Intl.DateTimeFormat('en-GB',{year:'numeric',month:'2-digit',day:'2-digit'});
+  const fmt = new Intl.DateTimeFormat('en-CA',{year:'numeric',month:'2-digit',day:'2-digit'});
   const days = new Map();
   for (const dt of firstWind.time){
     const mid = +new Date(dt.getFullYear(), dt.getMonth(), dt.getDate());
@@ -803,20 +821,22 @@ function snapToLive(){
 /* ==================== LOADING BAR HELPERS ==================== */
 function setLoadProgressPct(pct){
   const v = Math.max(0, Math.min(100, Math.round(pct)));
-  elements.hourSlider.style.setProperty('--load-w', v + '%');
+  requestAnimationFrame(() => {
+    elements.loadingBar.style.width = v + '%';
+  });
 }
 
 /* ==================== LOADING ==================== */
 function showLoading(show){
-  const s = elements.hourSlider;
+  const container = elements.sliderContainer;
   if(show){
-    s.classList.remove('loaded');
-    s.classList.add('loading');
+    container.classList.remove('loaded');
+    container.classList.add('loading');
     setLoadProgressPct(0);
   }else{
     setLoadProgressPct(100);
-    s.classList.remove('loading');
-    s.classList.add('loaded');
+    container.classList.remove('loading');
+    container.classList.add('loaded');
   }
 
   elements.countrySelect.disabled = show;
@@ -835,9 +855,13 @@ function showOfflineHint(msg){
 }
 
 /* ==================== MAIN ==================== */
-async function loadCountry(country){
+async function loadCountry(country, preserveTime = false){
   if(state.currentAbort) state.currentAbort.abort();
   state.currentAbort=new AbortController(); const {signal}=state.currentAbort;
+
+  // Store current selection before loading
+  const savedDate = preserveTime ? elements.dateSelect.value : null;
+  const savedHour = preserveTime ? elements.hourSlider.value : null;
 
   showLoading(true);
   clearLayers(); state.currentCountry=country;
@@ -878,7 +902,22 @@ async function loadCountry(country){
     const first = state.windSamples.find(s=>s.wind)?.wind;
     if (first){
       buildDateDropdownFromData(first);
-      snapToLive();
+      
+      // Restore previous selection if preserving time
+      if (preserveTime && savedDate && savedHour) {
+        // Check if saved date still exists in new dropdown
+        const dateExists = Array.from(elements.dateSelect.options).some(opt => opt.value === savedDate);
+        if (dateExists) {
+          elements.dateSelect.value = savedDate;
+          elements.hourSlider.value = savedHour;
+        } else {
+          // If saved date doesn't exist, snap to live
+          snapToLive();
+        }
+      } else {
+        // First load, snap to live
+        snapToLive();
+      }
     } else {
       elements.dateSelect.innerHTML = '';
       showOfflineHint('No wind timeline available right now.');
@@ -914,7 +953,7 @@ function initControls(){
   elements.dateSelect.onchange=applyTimeSelection;
   elements.hourSlider.oninput=applyTimeSelection;
   elements.liveBtn.onclick=snapToLive;
-  elements.countrySelect.onchange=async()=>{ await loadCountry(elements.countrySelect.value); };
+  elements.countrySelect.onchange=async()=>{ await loadCountry(elements.countrySelect.value, true); };
   
   const toggleInfo = () => { 
     elements.infoPanel.classList.toggle('collapsed'); 
