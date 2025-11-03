@@ -1,3 +1,4 @@
+```html
 <!doctype html>
 <html lang="en">
 <head>
@@ -38,14 +39,20 @@
   }
   .info-panel.collapsed .info-content{max-height:0;padding:0 var(--panel-padding)}
   .info-panel.collapsed .info-toggle{border-bottom:none;border-radius:var(--radius)}
-  .info-content{padding:var(--panel-padding);max-height:500px;overflow:hidden;transition:max-height .3s ease,padding .3s ease}
+  .info-content{
+    padding:var(--panel-padding);max-height:500px;overflow:hidden;transition:max-height .3s ease,padding .3s ease;
+    text-align:left; /* ensure panel text is left-aligned */
+  }
   .info-toggle{padding:var(--panel-padding);display:flex;align-items:center;gap:10px;cursor:pointer;border-bottom:1px solid var(--border);transition:background .2s}
   .info-toggle:hover{background:var(--color-gray-50);border-radius:var(--radius) var(--radius) 0 0}
   .toggle-arrow{margin-left:auto;transition:transform .3s;font-size:12px;color:var(--text-secondary)}
   .info-panel.collapsed .toggle-arrow{transform:rotate(180deg)}
   .logo-w{width:44px;height:44px;background:var(--text);color:#fff;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:700;flex-shrink:0}
   .logo-text{font-size:18px;font-weight:700;line-height:1.3}
-  .description{font-size:13px;line-height:1.5;color:var(--text-secondary);margin-bottom:20px;text-align:center}
+  .description{
+    font-size:13px;line-height:1.5;color:var(--text-secondary);
+    margin-bottom:20px;text-align:left; /* was center */
+  }
 
   .legend,.wind-legend{display:flex;align-items:center;gap:8px;font-size:13px}
   .legend{margin-bottom:12px}
@@ -60,7 +67,7 @@
   .disclaimer.open .disclaimer-text{max-height:200px;padding:0 14px 14px 14px}
   .disclaimer-arrow{margin-left:auto;transition:transform .3s}
   .disclaimer.open .disclaimer-arrow{transform:rotate(180deg)}
-  .credits{font-size:11px;color:var(--text-secondary);line-height:1.6}
+  .credits{font-size:11px;color:var(--text-secondary);line-height:1.6;text-align:left;}
 
   .control-bar{
     position:absolute;bottom:16px;left:16px;right:16px;z-index:10;background:var(--card-bg);border-radius:var(--radius);
@@ -83,12 +90,41 @@
     height:var(--control-height);display:flex;align-items:center;justify-content:center;border-radius:8px;padding:0 12px;border:1px solid var(--border)
   }
 
-  input[type=range]{flex:1;height:6px;border-radius:3px;background:var(--border);outline:none;appearance:none;position:relative}
-  input[type=range]::before{content:'';position:absolute;top:0;left:0;width:0%;height:100%;background:var(--color-red);border-radius:3px;pointer-events:none;opacity:0;transition:opacity .3s}
-  input[type=range].loading::before{opacity:1;animation:loadingPulse 1.5s ease-in-out infinite}
-  @keyframes loadingPulse{0%{width:20%;left:0%}50%{width:40%;left:30%}100%{width:20%;left:80%}}
-  input[type=range]::-webkit-slider-thumb{appearance:none;width:18px;height:18px;border-radius:50%;background:var(--color-red);cursor:pointer;box-shadow:0 2px 6px rgba(255,59,48,.4);transition:transform .2s;position:relative;z-index:10}
-  input[type=range]::-moz-range-thumb{width:18px;height:18px;border-radius:50%;background:var(--color-red);cursor:pointer;border:none;box-shadow:0 2px 6px rgba(255,59,48,.4);transition:transform .2s;position:relative;z-index:10}
+  /* ===== Range as progress bar (updated) ===== */
+  input[type=range]{
+    flex:1;height:6px;border-radius:3px;background:var(--border);
+    outline:none;appearance:none;position:relative
+  }
+  /* Progress fill (controlled by --load-w) */
+  input[type=range]::before{
+    content:'';
+    position:absolute;top:0;left:0;height:100%;
+    width:var(--load-w, 0%);
+    background:var(--color-red);           /* red while loading */
+    border-radius:3px;pointer-events:none;
+    opacity:0;                              /* hidden until .loading */
+    transition:
+      width .25s ease,
+      background-color .6s ease,
+      opacity .6s ease;
+  }
+  /* show bar during loading */
+  input[type=range].loading::before{ opacity:1; }
+  /* after load, fade to light grey */
+  input[type=range].loaded::before{
+    background:var(--color-gray-300);
+    opacity:.7;
+  }
+
+  /* Thumbs */
+  input[type=range]::-webkit-slider-thumb{
+    appearance:none;width:18px;height:18px;border-radius:50%;
+    background:var(--color-red);cursor:pointer;box-shadow:0 2px 6px rgba(255,59,48,.4);transition:transform .2s;position:relative;z-index:10
+  }
+  input[type=range]::-moz-range-thumb{
+    width:18px;height:18px;border-radius:50%;background:var(--color-red);
+    cursor:pointer;border:none;box-shadow:0 2px 6px rgba(255,59,48,.4);transition:transform .2s;position:relative;z-index:10
+  }
   input[type=range]:hover::-webkit-slider-thumb{transform:scale(1.1)}
   input[type=range]:hover::-moz-range-thumb{transform:scale(1.1)}
 
@@ -163,7 +199,8 @@
         <span class="disclaimer-arrow">▲</span>
       </div>
       <div class="disclaimer-text">
-        This tool uses AI assistance and may contain inaccuracies. Created for educational purposes to raise awareness about cross-border air quality issues.
+        This tool uses AI assistance and may contain inaccuracies. Created for educational purposes to raise awareness about cross-border air incursions.
+        Contact: <a href="https://www.linkedin.com/in/rokasarts/" target="_blank" rel="noopener noreferrer">LinkedIn</a>.
       </div>
     </div>
 
@@ -319,23 +356,24 @@ function getWindColor(speed){
   if(speed<hi) return interp(c2,c3,(speed-lo)/(hi-lo),.95);
   return hexToRgba(c3,.95);
 }
-function poolAll(items, fn, size=4){
+function poolAll(items, fn, size=4, onProgress){
   size=Math.max(1,Math.floor(size));
   return new Promise(resolve=>{
-    const out=new Array(items.length); let i=0,running=0,done=0;
+    const out=new Array(items.length); let i=0,running=0,done=0, total=items.length;
+    function bump(){ if(onProgress) onProgress(done, total); }
     function next(){
       while(running<size && i<items.length){
         const idx=i++; running++;
         Promise.resolve(fn(items[idx],idx))
           .then(v=>{out[idx]=v})
           .catch(e=>{console.warn(`Task ${idx} failed:`,e?.message||e); out[idx]=null})
-          .finally(()=>{running--; done++; done===items.length?resolve(out):next()});
+          .finally(()=>{running--; done++; bump(); done===items.length?resolve(out):next()});
       }
     }
+    bump(); // initial
     next();
   });
 }
-
 async function withRetry(fn, tries = 2, delayMs = 250){
   let lastErr;
   for (let i=0; i<tries; i++){
@@ -762,9 +800,25 @@ function snapToLive(){
   applyTimeSelection();
 }
 
+/* ==================== LOADING BAR HELPERS ==================== */
+function setLoadProgressPct(pct){
+  const v = Math.max(0, Math.min(100, Math.round(pct)));
+  elements.hourSlider.style.setProperty('--load-w', v + '%');
+}
+
 /* ==================== LOADING ==================== */
 function showLoading(show){
-  elements.hourSlider.classList.toggle('loading', show);
+  const s = elements.hourSlider;
+  if(show){
+    s.classList.remove('loaded');
+    s.classList.add('loading');
+    setLoadProgressPct(0);                // start at 0%
+  }else{
+    setLoadProgressPct(100);              // ensure full before fade
+    s.classList.remove('loading');
+    s.classList.add('loaded');            // CSS fades to light grey
+  }
+
   elements.countrySelect.disabled = show;
   elements.dateSelect.disabled = show;
   elements.hourSlider.disabled = show;
@@ -789,12 +843,32 @@ async function loadCountry(country){
   clearLayers(); state.currentCountry=country;
 
   try{
+    // 0–28%: country geometry setup
+    setLoadProgressPct(5);
     state.feature=simplifyFeature(await fetchCountryFeature(country));
+    setLoadProgressPct(20);
+
     state.rings=extractOuterRings(state.feature);
     drawCountryAndBorder();
+    setLoadProgressPct(28);
 
+    // 28–100%: wind sampling & fetching
     state.windSamples = state.rings.flatMap(r=>sampleForWind(r));
-    const winds = await poolAll(state.windSamples,(s)=>cachedWind(s.m[1],s.m[0],signal),CONFIG.CONCURRENCY);
+    setLoadProgressPct(30);
+
+    const total = state.windSamples.length || 1;
+
+    const winds = await poolAll(
+      state.windSamples,
+      (s)=>cachedWind(s.m[1],s.m[0],signal),
+      CONFIG.CONCURRENCY,
+      (completed)=>{
+        // Smooth linear mapping 30% -> 100%
+        const pct = 30 + (completed/total) * 70;
+        setLoadProgressPct(pct);
+      }
+    );
+
     state.windSamples.forEach((s,i)=>{ s.wind=winds[i]; });
 
     if (!state.windSamples.some(s=>s.wind)){
@@ -821,7 +895,7 @@ async function loadCountry(country){
       showOfflineHint('Network or API error. Map might be incomplete; please retry.');
     }
   } finally {
-    showLoading(false);
+    showLoading(false); // shifts bar to grey
   }
 }
 
@@ -870,3 +944,4 @@ await loadCountry(elements.countrySelect.value);
 </script>
 </body>
 </html>
+```
