@@ -5,7 +5,15 @@
 <title>Wind Border Marker</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5">
 <meta name="author" content="Rokasarts">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎈</text></svg>">
+<!-- Emoji Favicon 🎈 -->
+<link rel="icon" href="data:image/svg+xml,
+<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'>
+  <text y='.9em' font-size='90'>🎈</text>
+</svg>">
+<link rel="apple-touch-icon" href="data:image/svg+xml,
+<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'>
+  <text y='.9em' font-size='90'>🎈</text>
+</svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -111,13 +119,11 @@
   .loading-bar{
     position:absolute;top:0;left:0;height:100%;width:0%;
     background:var(--color-red);border-radius:3px;pointer-events:none;
-    opacity:0;transition:width .15s cubic-bezier(0.4, 0, 0.2, 1), background-color .4s ease, opacity .4s ease;
-    z-index:1;
-    will-change:width;
+    z-index:1;opacity:1;
   }
   
   .slider-container.loading .loading-bar{
-    opacity:1;
+    display:block;
   }
   
   .slider-container.loaded .loading-bar{
@@ -145,7 +151,7 @@
   input[type=range]:hover::-webkit-slider-thumb{transform:scale(1.1)}
   input[type=range]:hover::-moz-range-thumb{transform:scale(1.1)}
 
-  button{height:var(--control-height);padding:0 18px;background:var(--text);color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:600;font-family:inherit;cursor:pointer;white-space:nowrap;transition:all .2s;min-width:100px}
+  button{height:var(--control-height);padding:0 18px;background:var(--text);color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:600;font-family:inherit;cursor:pointer;white-space:nowrap;transition:all .2s;min-width:140px}
   button:hover:not(:disabled){opacity:.9;transform:translateY(-1px)}
   button:active:not(:disabled){transform:translateY(0)}
   button.live-active{background:var(--color-green)}
