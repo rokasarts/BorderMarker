@@ -60,13 +60,26 @@ html,body{height:100vh;height:100dvh;font-family:Inter,sans-serif;color:var(--te
 .disclaimer .arrow{font-size:12px;color:rgba(255,212,196,0.95);transition:transform 0.3s cubic-bezier(0.4, 0.0, 0.2, 1)}
 .disclaimer.open .arrow{transform:rotate(180deg)}
 
-/* Enhanced credits styling with normal capitalization and colons */
-.credits{font-size:14px;line-height:1.8;margin-top:16px;display:grid;grid-template-columns:repeat(2,1fr);gap:16px 24px}
-.credits-row{display:flex;flex-direction:column;gap:4px}
-.credit-label{color:#7f8c96;font-size:12px;font-weight:400;letter-spacing:0.05em}
-.credit-value{color:var(--text);font-size:14px;font-weight:400}
+/* Enhanced credits styling with normal capitalization and colons - compact version */
+.credits{font-size:12px;line-height:1.5;margin-top:12px;display:grid;grid-template-columns:repeat(2,1fr);gap:8px 16px}
+.credits-row{display:flex;flex-direction:column;gap:2px}
+.credit-label{color:#7f8c96;font-size:11px;font-weight:400;letter-spacing:0.05em}
+.credit-value{color:var(--text);font-size:12px;font-weight:400;display:flex;align-items:center;gap:6px}
 .credit-value a{color:var(--text);text-decoration:underline;transition:color 0.2s ease}
 .credit-value a:hover{color:var(--orange)}
+
+/* API status dot */
+.api-status-dot{
+width:6px;
+height:6px;
+border-radius:50%;
+background:#666;
+flex-shrink:0;
+transition:background-color 0.3s ease;
+}
+.api-status-dot.status-green{background:#1DB95C}
+.api-status-dot.status-orange{background:#FF6200}
+.api-status-dot.status-red{background:#ef4444}
 
 .controls{position:absolute;bottom:var(--padding);left:var(--padding);right:var(--padding);z-index:10;background:var(--bg);border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,.5);padding:0;display:flex;align-items:stretch;overflow:hidden;border:1px solid var(--border);height:90px}
 .btn-container{display:flex;align-items:stretch;border-right:1px solid var(--border);width:180px}
@@ -259,7 +272,10 @@ select {
 </div>
 <div class="credits-row">
 <span class="credit-label">Wind:</span>
-<span class="credit-value">Open-Meteo / met.no</span>
+<span class="credit-value">
+<span class="api-status-dot" title="API status"></span>
+<span class="api-status-text">Loading...</span>
+</span>
 </div>
 <div class="credits-row">
 <span class="credit-label">Map:</span>
@@ -347,7 +363,8 @@ return hex2rgba(c3,.95);
 const cache={wind:new Map(),country:new Map()};
 const state={
 feature:null,rings:[],samples:[],timeIdx:0,borderLayer:null,
-redLayer:null,abort:null,country:'Lithuania',particleLayer:null,isLoaded:false
+redLayer:null,abort:null,country:'Lithuania',particleLayer:null,isLoaded:false,
+apiStatus:'unknown' // Track which API is working: 'open-meteo', 'met.no', or 'unknown'
 };
 
 // Map initialization
@@ -438,11 +455,19 @@ return feature;
 
 async function fetchWindMetNo(lat,lon,signal){
 const url=`https://api.met.no/weatherapi/locationforecast/2.0/compact?lat=${lat}&lon=${lon}`;
+console.log('Fetching from met.no:', url);
 const res=await fetch(url,{signal,headers:{Accept:'application/json','User-Agent':CFG.UA}});
-if(!res.ok)throw new Error(`met.no ${res.status}`);
+if(!res.ok){
+console.error('met.no HTTP error:', res.status, res.statusText);
+throw new Error(`met.no ${res.status}`);
+}
 const data=await res.json();
+console.log('met.no response received, parsing...');
 const series=data?.properties?.timeseries||[];
-if(!series.length)throw new Error('met.no empty');
+if(!series.length){
+console.error('met.no: No timeseries data');
+throw new Error('met.no empty');
+}
 const time=[],dir=[],spd=[];
 for(const row of series){
 const details=row?.data?.instant?.details||{};
@@ -451,31 +476,69 @@ const s=details.wind_speed;
 if(typeof d==='number'&&typeof s==='number'){
 time.push(new Date(row.time));
 dir.push(d);
-spd.push(s*3.6);
+spd.push(s*3.6); // Convert m/s to km/h
 }
 }
-if(!time.length)throw new Error('met.no: no usable wind points');
+console.log(`met.no: Parsed ${time.length} wind data points`);
+if(!time.length){
+console.error('met.no: No usable wind data found');
+throw new Error('met.no: no usable wind points');
+}
+console.log('met.no API success');
 return{time,dir,spd};
 }
 
 async function fetchWind(lat,lon,signal){
+// If Open-Meteo was previously failing, try met.no first
+if(state.apiStatus === 'met.no'){
+try{
+console.log('Using met.no API (previous fallback)...');
+const result = await retry(()=>fetchWindMetNo(lat,lon,signal),2,500);
+state.apiStatus = 'met.no';
+updateApiStatusDot();
+return result;
+}catch(e){
+console.warn('met.no also failing, trying Open-Meteo again:', e?.message||e);
+// Fall through to try Open-Meteo
+}
+}
+
 const url=`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=wind_speed_10m,wind_direction_10m&forecast_days=${CFG.DAYS}&timezone=auto&windspeed_unit=kmh`;
 try{
-return await retry(async()=>{
-const res=await fetch(url,{signal});
+console.log('Trying Open-Meteo API...');
+const result = await retry(async()=>{
+const res=await fetch(url,{signal,headers:{'User-Agent':CFG.UA}});
 if(!res.ok)throw new Error(`Open-Meteo ${res.status}`);
 const data=await res.json();
 if(!data?.hourly?.time||!data.hourly.wind_speed_10m||!data.hourly.wind_direction_10m)
 throw new Error('Open-Meteo payload missing');
+console.log('Open-Meteo API success');
 return{
 time:data.hourly.time.map(t=>new Date(t)),
 dir:data.hourly.wind_direction_10m,
 spd:data.hourly.wind_speed_10m
 };
-},2,300);
+},1,500);
+state.apiStatus = 'open-meteo';
+updateApiStatusDot();
+return result;
 }catch(e){
-console.warn('Open-Meteo failed, trying met.no:',e?.message||e);
-return await retry(()=>fetchWindMetNo(lat,lon,signal),2,300);
+console.warn('Open-Meteo failed, switching to met.no fallback:',e?.message||e);
+try{
+const result = await retry(()=>fetchWindMetNo(lat,lon,signal),2,500);
+state.apiStatus = 'met.no';
+updateApiStatusDot();
+return result;
+}catch(fallbackError){
+console.error('Both APIs failed:',{
+openMeteo: e?.message||e,
+metNo: fallbackError?.message||fallbackError
+});
+state.apiStatus = 'unknown';
+updateApiStatusDot();
+// If both fail, throw the original Open-Meteo error
+throw e;
+}
 }
 }
 
@@ -487,7 +550,53 @@ cache.wind.set(key,val);
 return val;
 }
 
-// Geometry processing
+// Add a test function for debugging API calls
+async function testAPIs(){
+console.log('=== API TEST START ===');
+const testLat = 55.169, testLon = 23.881; // Lithuania coords
+try{
+console.log('Testing Open-Meteo...');
+const openMeteoData = await fetchWind(testLat, testLon, new AbortController().signal);
+console.log('Open-Meteo test result:', openMeteoData ? 'SUCCESS' : 'FAILED');
+}catch(e){
+console.log('Open-Meteo test failed:', e.message);
+}
+try{
+console.log('Testing met.no directly...');
+const metNoData = await fetchWindMetNo(testLat, testLon, new AbortController().signal);
+console.log('met.no test result:', metNoData ? 'SUCCESS' : 'FAILED');
+}catch(e){
+console.log('met.no test failed:', e.message);
+}
+console.log('=== API TEST END ===');
+}
+
+// Function to update the API status dot
+function updateApiStatusDot(){
+const statusDot = document.querySelector('.api-status-dot');
+const statusText = document.querySelector('.api-status-text');
+if(!statusDot || !statusText) return;
+statusDot.className = 'api-status-dot';
+switch(state.apiStatus){
+case 'open-meteo':
+statusDot.classList.add('status-green');
+statusDot.title = 'Using Open-Meteo API (primary)';
+statusText.textContent = 'Open-Meteo';
+break;
+case 'met.no':
+statusDot.classList.add('status-orange');
+statusDot.title = 'Using met.no API (fallback)';
+statusText.textContent = 'met.no';
+break;
+default:
+statusDot.classList.add('status-red');
+statusDot.title = 'API connection failed';
+statusText.textContent = 'API Error';
+}
+}
+
+// Uncomment next line to run test on load:
+setTimeout(testAPIs, 2000);
 function simplify(feat){
 return turf.simplify(feat,{tolerance:km2deg(CFG.SIMPLIFY),highQuality:false,mutate:false});
 }
