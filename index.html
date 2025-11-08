@@ -14,8 +14,23 @@
 <style>
 :root{--green:#1DB95C;--purple:#662FFF;--orange:#FF6200;--bg:#141F24;--text:#f1f5f9;--border:#2a4148;--padding:16px;--gap:30px}
 *{margin:0;padding:0;box-sizing:border-box}
-html,body,#map{height:100vh;font-family:Inter,sans-serif;color:var(--text);background:var(--bg)}
-#map{position:relative;z-index:1;overflow:hidden}
+html,body{height:100vh;height:100dvh;font-family:Inter,sans-serif;color:var(--text);background:var(--bg);margin:0;padding:0;overflow:hidden}
+#map{position:fixed;top:0;left:0;width:100vw;height:100vh;height:100dvh;z-index:1;overflow:hidden}
+
+/* Mobile map adjustments */
+@media(max-width:1024px){
+  html, body {
+    height: 100vh;
+    height: 100dvh; /* Use dynamic viewport height on mobile */
+  }
+  
+  #map {
+    height: 100vh;
+    height: 100dvh;
+    padding-bottom: calc(128px + var(--safe-bottom) + var(--padding)); /* Account for controls height */
+    box-sizing: border-box;
+  }
+}
 .leaflet-particle-layer{overflow:hidden;will-change:transform;z-index:400!important;pointer-events:none;position:absolute!important}
 .leaflet-overlay-pane{z-index:200}
 .leaflet-marker-pane{z-index:600}
@@ -108,19 +123,52 @@ input[type=range]::-webkit-slider-runnable-track{width:100%;height:6px;cursor:po
 
 @media(max-width:1024px){
 .info{
+  position: fixed;
   top: calc(var(--safe-top) + var(--padding));
   width: calc(100vw - calc(var(--padding) * 2) - var(--safe-left) - var(--safe-right));
   left: calc(var(--padding) + var(--safe-left));
   right: auto;
   bottom: auto;
+  max-height: calc(50vh - var(--safe-top) - var(--padding) * 2);
+  overflow-y: auto;
 }
+
 .controls{
-  flex-wrap:wrap;
-  height:auto;
+  position: fixed;
+  flex-wrap: wrap;
+  height: auto;
   bottom: calc(var(--safe-bottom) + var(--padding));
   left: calc(var(--padding) + var(--safe-left));
   right: calc(var(--padding) + var(--safe-right));
+  width: auto;
+  border-radius: 16px;
+  z-index: 1000;
 }
+
+/* Mobile-specific time interaction fixes */
+.time-display {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+  width: 72px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  transition: color 0.2s ease;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.time-display.selecting {
+  color: var(--orange) !important;
+}
+
+.time-display.hovering {
+  color: var(--orange) !important;
+}
+
 .btn-container{border-right:none;border-bottom:1px solid var(--border);width:100%;height:64px}
 button{height:64px;padding:0 var(--padding)}
 .cell{height:64px;border-bottom:1px solid var(--border)}
@@ -132,6 +180,9 @@ button{height:64px;padding:0 var(--padding)}
 body {
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: none;
+  position: fixed;
+  width: 100%;
+  height: 100%;
 }
 
 #map {
@@ -142,6 +193,26 @@ body {
 /* Fix for potential viewport issues on iOS */
 html {
   -webkit-text-size-adjust: 100%;
+}
+
+/* Improve touch targets on mobile */
+input[type=range] {
+  height: 44px; /* Minimum touch target size */
+  margin-top: -19px; /* Center the larger touch target */
+}
+
+input[type=range]::-webkit-slider-thumb {
+  width: 32px;
+  height: 32px;
+  margin-top: -13px;
+}
+
+/* Better select styling on mobile */
+select {
+  font-size: 16px; /* Prevent zoom on focus in iOS */
+  -webkit-appearance: none;
+  background-size: 16px 16px;
+}
 }
 }
 </style>
@@ -944,28 +1015,53 @@ const timeDisplay = $('timeDisplay');
 const hourSlider = $('hour');
 const sliderContainer = document.querySelector('.slider-container');
 
+// Mobile and desktop event handling
+const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
 // Highlight clock when interacting with slider
-hourSlider.addEventListener('mousedown', () => {
-timeDisplay.classList.add('selecting');
-});
+const addSelectingClass = () => timeDisplay.classList.add('selecting');
+const removeSelectingClass = () => timeDisplay.classList.remove('selecting');
 
-hourSlider.addEventListener('mouseup', () => {
-timeDisplay.classList.remove('selecting');
-});
+if (isMobile) {
+  // Touch events for mobile
+  hourSlider.addEventListener('touchstart', addSelectingClass, {passive: true});
+  hourSlider.addEventListener('touchend', removeSelectingClass, {passive: true});
+  hourSlider.addEventListener('touchcancel', removeSelectingClass, {passive: true});
+  
+  // Enhanced mobile slider interaction highlighting
+  hourSlider.addEventListener('input', () => {
+    timeDisplay.classList.add('selecting');
+    // Keep highlighting for a bit longer on mobile
+    setTimeout(() => {
+      if (!hourSlider.matches(':active')) {
+        timeDisplay.classList.remove('selecting');
+      }
+    }, 100);
+  });
+  
+  hourSlider.addEventListener('change', () => {
+    setTimeout(removeSelectingClass, 200);
+  });
+} else {
+  // Mouse events for desktop
+  hourSlider.addEventListener('mousedown', addSelectingClass);
+  hourSlider.addEventListener('mouseup', removeSelectingClass);
+}
 
-// Highlight clock when hovering over slider area
-sliderContainer.addEventListener('mouseenter', () => {
-timeDisplay.classList.add('hovering');
-});
+// Highlight clock when hovering over slider area (desktop only)
+if (!isMobile) {
+  sliderContainer.addEventListener('mouseenter', () => {
+    timeDisplay.classList.add('hovering');
+  });
 
-sliderContainer.addEventListener('mouseleave', () => {
-timeDisplay.classList.remove('hovering');
-});
+  sliderContainer.addEventListener('mouseleave', () => {
+    timeDisplay.classList.remove('hovering');
+  });
+}
 
-// Clean up on mouse leave from document (in case of drag outside)
-document.addEventListener('mouseup', () => {
-timeDisplay.classList.remove('selecting');
-});
+// Clean up on document events
+document.addEventListener('mouseup', removeSelectingClass);
+document.addEventListener('touchend', removeSelectingClass, {passive: true});
 }
 
 function init(){
