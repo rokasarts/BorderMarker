@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <title>Border Marker</title>
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
 <meta name="description" content="Environmental awareness app for real time wind data across country borders">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='80'>👾</text></svg>">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -86,16 +86,63 @@ input[type=range]::-webkit-slider-thumb:hover{transform:scale(1.1)}
 input[type=range]::-webkit-slider-runnable-track{width:100%;height:6px;cursor:pointer;background:transparent;border-radius:3px}
 .emoji{transform:translate(-50%,-92%);font-size:36px;cursor:pointer}
 .tooltip{position:absolute;background:rgba(26,26,26,.95);color:#fff;padding:6px 10px;border-radius:6px;font-size:12px;font-weight:600;pointer-events:none;z-index:20;display:none}
-.offline{position:fixed;left:50%;top:var(--padding);transform:translateX(-50%);background:#fff3cd;border:1px solid #ffe69c;color:#664d03;padding:10px 14px;border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.5);z-index:100;font-size:13px;font-weight:600;display:none}
+.offline{position:fixed;left:50%;top:calc(var(--safe-top) + var(--padding));transform:translateX(-50%);background:#fff3cd;border:1px solid #ffe69c;color:#664d03;padding:10px 14px;border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.5);z-index:100;font-size:13px;font-weight:600;display:none;max-width:calc(100vw - 2 * var(--padding) - var(--safe-left) - var(--safe-right));margin:0 calc(var(--padding) + var(--safe-left));word-wrap:break-word}
+/* Safari mobile safe area support */
+@supports (padding-top: env(safe-area-inset-top)) {
+  :root {
+    --safe-top: env(safe-area-inset-top);
+    --safe-bottom: env(safe-area-inset-bottom);
+    --safe-left: env(safe-area-inset-left);
+    --safe-right: env(safe-area-inset-right);
+  }
+}
+
+@supports not (padding-top: env(safe-area-inset-top)) {
+  :root {
+    --safe-top: 0px;
+    --safe-bottom: 0px;
+    --safe-left: 0px;
+    --safe-right: 0px;
+  }
+}
+
 @media(max-width:1024px){
-.info{top:var(--padding);width:calc(100vw - calc(var(--padding) * 2));right:var(--padding);bottom:auto}
-.controls{flex-wrap:wrap;height:auto}
+.info{
+  top: calc(var(--safe-top) + var(--padding));
+  width: calc(100vw - calc(var(--padding) * 2) - var(--safe-left) - var(--safe-right));
+  left: calc(var(--padding) + var(--safe-left));
+  right: auto;
+  bottom: auto;
+}
+.controls{
+  flex-wrap:wrap;
+  height:auto;
+  bottom: calc(var(--safe-bottom) + var(--padding));
+  left: calc(var(--padding) + var(--safe-left));
+  right: calc(var(--padding) + var(--safe-right));
+}
 .btn-container{border-right:none;border-bottom:1px solid var(--border);width:100%;height:64px}
 button{height:64px;padding:0 var(--padding)}
 .cell{height:64px;border-bottom:1px solid var(--border)}
 .cell.country{width:50%;border-right:1px solid var(--border)}
 .cell.date{width:50%}
 .cell.slider{width:100%;border-bottom:none;border-right:none}
+
+/* Additional mobile Safari fixes */
+body {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: none;
+}
+
+#map {
+  /* Prevent zoom on double tap in iOS Safari */
+  touch-action: pan-x pan-y;
+}
+
+/* Fix for potential viewport issues on iOS */
+html {
+  -webkit-text-size-adjust: 100%;
+}
 }
 </style>
 </head>
