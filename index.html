@@ -17,6 +17,19 @@
 html,body{height:100vh;height:100dvh;font-family:Inter,sans-serif;color:var(--text);background:var(--bg);margin:0;padding:0;overflow:hidden}
 #map{position:fixed;top:0;left:0;width:100vw;height:100vh;height:100dvh;z-index:1;overflow:hidden}
 
+/* Fix white background issue by making map background match dark theme */
+.leaflet-container {
+    background: var(--bg) !important;
+}
+
+.leaflet-tile-pane {
+    background: var(--bg) !important;
+}
+
+#map .leaflet-tile-pane {
+    background: var(--bg) !important;
+}
+
 /* Mobile map adjustments */
 @media(max-width:1024px){
   html, body {
@@ -322,7 +335,7 @@ const CFG={
 DAYS:6,STEP:5,SAMPLE:40,ANGLE:80,SIMPLIFY:2.5,
 CONCUR:Math.max(1,Math.min(8,Math.floor((navigator.hardwareConcurrency||4)/2))),
 LINE_W:5.5,PARTICLES:12,LIFE:100,SPEED:[0.07,0.5,2.2],WIND:[10,30],
-COLORS:['#1DB95C','#662FFF','#FF6200'],NIGHT:20,
+COLORS:['#1DB95C','#662FFF','#FF6200'],NIGHT:20, // Changed back from 50 to 20
 UA:'BorderMarker/1.0 (Educational; Rokasarts)'
 };
 
@@ -422,20 +435,47 @@ if(i<tries-1)await new Promise(r=>setTimeout(r,delay));
 throw lastErr;
 }
 
-// Tile opacity for day/night cycle
+// Fixed tile opacity for day/night cycle
 function updateTileOpacity(date,country){
 const coords=COORDS[country]||{lat:54.7,lon:25.3};
 const t=SunCalc.getTimes(date,coords.lat,coords.lon);
 const now=date.getTime(),maxDim=CFG.NIGHT/100;
 let dim=0;
-if(now<t.dawn.getTime())dim=maxDim;
-else if(now<t.sunrise.getTime())
-dim=maxDim*(1-(now-t.dawn.getTime())/Math.max(1,t.sunrise.getTime()-t.dawn.getTime()));
-else if(now<t.sunset.getTime())dim=0;
-else if(now<t.dusk.getTime())
-dim=maxDim*((now-t.sunset.getTime())/Math.max(1,t.dusk.getTime()-t.sunset.getTime()));
-else dim=maxDim;
-tiles.setOpacity(1-dim);
+
+// Calculate dimming based on sun position
+if(now<t.dawn.getTime()){
+// Before dawn - night time
+dim=maxDim;
+}else if(now<t.sunrise.getTime()){
+// Dawn period - gradually getting brighter
+const progress=(now-t.dawn.getTime())/Math.max(1,t.sunrise.getTime()-t.dawn.getTime());
+dim=maxDim*(1-progress);
+}else if(now<t.sunset.getTime()){
+// Day time - no dimming
+dim=0;
+}else if(now<t.dusk.getTime()){
+// Dusk period - gradually getting darker  
+const progress=(now-t.sunset.getTime())/Math.max(1,t.dusk.getTime()-t.sunset.getTime());
+dim=maxDim*progress;
+}else{
+// After dusk - night time
+dim=maxDim;
+}
+
+const opacity = Math.max(0.1, Math.min(1, 1-dim)); // Ensure opacity stays between 0.1 and 1
+console.log('Day/Night cycle - Time:', date.toISOString(), 'Opacity:', opacity.toFixed(2), 'Dim:', dim.toFixed(2));
+
+// Apply opacity to tiles with smooth transition
+if(tiles && tiles.setOpacity){
+tiles.setOpacity(opacity);
+}else{
+// Fallback method using CSS
+const tilePane = map.getPane('tilePane');
+if(tilePane){
+tilePane.style.opacity = opacity;
+tilePane.style.transition = 'opacity 0.8s ease-out';
+}
+}
 }
 
 // API fetching
