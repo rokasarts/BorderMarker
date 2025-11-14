@@ -25,21 +25,40 @@
 :root{--green:#1DB95C;--purple:#662FFF;--orange:#FF6200;--bg:#141F24;--text:#f1f5f9;--border:#2a4148;--padding:16px;--gap:30px}
 *{margin:0;padding:0;box-sizing:border-box}
 html,body{height:100vh;height:100dvh;font-family:Inter,sans-serif;color:var(--text);background:var(--bg);margin:0;padding:0;overflow:hidden}
-#map{position:fixed;top:0;left:0;width:100vw;height:100vh;height:100dvh;z-index:1;overflow:hidden}
-<!-- Google tag (gtag.js) -->
-<script async src="https://www.googletagmanager.com/gtag/js?id=G-NQ970VVVV6"></script>
+#map{position:fixed;top:0;left:0;width:100vw;height:100vh;height:100dvh;z-index:1;overflow:hidden;background:#000000!important}
 
-/* Fix white background issue by making map background match dark theme */
+/* Force black background for map regardless of system theme */
 .leaflet-container {
-    background: var(--bg) !important;
+    background: #000000 !important;
+    background-color: #000000 !important;
 }
 
 .leaflet-tile-pane {
-    background: var(--bg) !important;
+    background: #000000 !important;
+    background-color: #000000 !important;
 }
 
 #map .leaflet-tile-pane {
-    background: var(--bg) !important;
+    background: #000000 !important;
+    background-color: #000000 !important;
+}
+
+/* Additional forced black background styles */
+.leaflet-map-pane {
+    background: #000000 !important;
+    background-color: #000000 !important;
+}
+
+.leaflet-container::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: #000000 !important;
+    z-index: -1;
+    pointer-events: none;
 }
 
 /* Mobile map adjustments */
@@ -265,7 +284,6 @@ select {
   background-size: 16px 16px;
 }
 }
-}
 </style>
 </head>
 <body>
@@ -347,7 +365,7 @@ const CFG={
 DAYS:6,STEP:5,SAMPLE:40,ANGLE:80,SIMPLIFY:2.5,
 CONCUR:Math.max(1,Math.min(8,Math.floor((navigator.hardwareConcurrency||4)/2))),
 LINE_W:5.5,PARTICLES:12,LIFE:100,SPEED:[0.07,0.5,2.2],WIND:[10,30],
-COLORS:['#1DB95C','#662FFF','#FF6200'],NIGHT:20, // Changed back from 50 to 20
+COLORS:['#1DB95C','#662FFF','#FF6200'],NIGHT:20,
 UA:'BorderMarker/1.0 (Educational; Rokasarts)'
 };
 
@@ -362,9 +380,28 @@ const $=(id)=>document.getElementById(id);
 const norm=a=>(a%360+360)%360;
 const angDiff=(a,b)=>{const d=Math.abs(norm(a)-norm(b));return d>180?360-d:d};
 const km2deg=km=>km/111;
-const snapKey=v=>(Math.round(v*50)/50).toFixed(2);
+const snapKey=v=>(Math.round(v*10)/10).toFixed(1); // Snap to 0.1 degree grid
 
-// Color utilities - merged
+// Enhanced cache with 30min expiration and spatial clustering
+const cache={
+  wind:new Map(),
+  country:new Map(),
+  
+  set(type,key,value){
+    this[type].set(key,{data:value,time:Date.now()});
+  },
+  
+  get(type,key){
+    const item=this[type].get(key);
+    if(!item||Date.now()-item.time>30*60*1000){
+      this[type].delete(key);
+      return null;
+    }
+    return item.data;
+  }
+};
+
+// Color utilities
 const hex2rgba=(h,a=1)=>{
 const r=parseInt(h.slice(1,3),16),g=parseInt(h.slice(3,5),16),b=parseInt(h.slice(5,7),16);
 return`rgba(${r},${g},${b},${a})`;
@@ -385,11 +422,10 @@ return hex2rgba(c3,.95);
 };
 
 // State and cache
-const cache={wind:new Map(),country:new Map()};
 const state={
 feature:null,rings:[],samples:[],timeIdx:0,borderLayer:null,
 redLayer:null,abort:null,country:'Lithuania',particleLayer:null,isLoaded:false,
-apiStatus:'unknown' // Track which API is working: 'open-meteo', 'met.no', or 'unknown'
+apiStatus:'unknown'
 };
 
 // Map initialization
@@ -405,7 +441,7 @@ const balloon=L.marker([53.9,27.56],{
 icon:L.divIcon({className:'emoji',html:'👾',iconSize:[40,40]})
 }).addTo(map);
 
-// Async utilities - optimized pooling
+// Async utilities
 async function poolAll(items,fn,size=4,onProg){
 size=Math.max(1,Math.floor(size));
 return new Promise(resolve=>{
@@ -454,34 +490,25 @@ const t=SunCalc.getTimes(date,coords.lat,coords.lon);
 const now=date.getTime(),maxDim=CFG.NIGHT/100;
 let dim=0;
 
-// Calculate dimming based on sun position
 if(now<t.dawn.getTime()){
-// Before dawn - night time
 dim=maxDim;
 }else if(now<t.sunrise.getTime()){
-// Dawn period - gradually getting brighter
 const progress=(now-t.dawn.getTime())/Math.max(1,t.sunrise.getTime()-t.dawn.getTime());
 dim=maxDim*(1-progress);
 }else if(now<t.sunset.getTime()){
-// Day time - no dimming
 dim=0;
 }else if(now<t.dusk.getTime()){
-// Dusk period - gradually getting darker  
 const progress=(now-t.sunset.getTime())/Math.max(1,t.dusk.getTime()-t.sunset.getTime());
 dim=maxDim*progress;
 }else{
-// After dusk - night time
 dim=maxDim;
 }
 
-const opacity = Math.max(0.1, Math.min(1, 1-dim)); // Ensure opacity stays between 0.1 and 1
-console.log('Day/Night cycle - Time:', date.toISOString(), 'Opacity:', opacity.toFixed(2), 'Dim:', dim.toFixed(2));
+const opacity = Math.max(0.1, Math.min(1, 1-dim));
 
-// Apply opacity to tiles with smooth transition
 if(tiles && tiles.setOpacity){
 tiles.setOpacity(opacity);
 }else{
-// Fallback method using CSS
 const tilePane = map.getPane('tilePane');
 if(tilePane){
 tilePane.style.opacity = opacity;
@@ -492,7 +519,8 @@ tilePane.style.transition = 'opacity 0.8s ease-out';
 
 // API fetching
 async function fetchCountry(country){
-if(cache.country.has(country))return cache.country.get(country);
+const cached=cache.get('country',country);
+if(cached)return cached;
 const url=`https://nominatim.openstreetmap.org/search?format=geojson&limit=1&polygon_geojson=1&polygon_threshold=0.01&country=${encodeURIComponent(country)}`;
 const feature=await retry(async()=>{
 const res=await fetch(url,{headers:{Accept:'application/geo+json','User-Agent':CFG.UA}});
@@ -501,7 +529,7 @@ const data=await res.json();
 if(!data.features?.length)throw new Error('No polygon for '+country);
 return data.features[0];
 },2,300);
-cache.country.set(country,feature);
+cache.set('country',country,feature);
 return feature;
 }
 
@@ -588,42 +616,21 @@ metNo: fallbackError?.message||fallbackError
 });
 state.apiStatus = 'unknown';
 updateApiStatusDot();
-// If both fail, throw the original Open-Meteo error
 throw e;
 }
 }
 }
 
+// Smart cached wind with spatial clustering
 async function cachedWind(lat,lon,signal){
 const key=`${snapKey(lat)},${snapKey(lon)}`;
-if(cache.wind.has(key))return cache.wind.get(key);
+const cached=cache.get('wind',key);
+if(cached)return cached;
 const val=await fetchWind(lat,lon,signal);
-cache.wind.set(key,val);
+cache.set('wind',key,val);
 return val;
 }
 
-// Add a test function for debugging API calls
-async function testAPIs(){
-console.log('=== API TEST START ===');
-const testLat = 55.169, testLon = 23.881; // Lithuania coords
-try{
-console.log('Testing Open-Meteo...');
-const openMeteoData = await fetchWind(testLat, testLon, new AbortController().signal);
-console.log('Open-Meteo test result:', openMeteoData ? 'SUCCESS' : 'FAILED');
-}catch(e){
-console.log('Open-Meteo test failed:', e.message);
-}
-try{
-console.log('Testing met.no directly...');
-const metNoData = await fetchWindMetNo(testLat, testLon, new AbortController().signal);
-console.log('met.no test result:', metNoData ? 'SUCCESS' : 'FAILED');
-}catch(e){
-console.log('met.no test failed:', e.message);
-}
-console.log('=== API TEST END ===');
-}
-
-// Function to update the API status dot
 function updateApiStatusDot(){
 const statusDot = document.querySelector('.api-status-dot');
 const statusText = document.querySelector('.api-status-text');
@@ -638,7 +645,7 @@ break;
 case 'met.no':
 statusDot.classList.add('status-orange');
 statusDot.title = 'Using met.no API (fallback)';
-statusText.textContent = 'met.no';
+statusText.textContent = 'met.no (fallback)';
 break;
 default:
 statusDot.classList.add('status-red');
@@ -647,8 +654,6 @@ statusText.textContent = 'API Error';
 }
 }
 
-// Uncomment next line to run test on load:
-setTimeout(testAPIs, 2000);
 function simplify(feat){
 return turf.simplify(feat,{tolerance:km2deg(CFG.SIMPLIFY),highQuality:false,mutate:false});
 }
@@ -691,6 +696,20 @@ m:M.geometry.coordinates,bearing,outward
 });
 }
 return pts;
+}
+
+// Spatial clustering - the key optimization
+function clusterSamples(samples){
+const clusters=new Map();
+for(const s of samples){
+const key=`${snapKey(s.m[1])},${snapKey(s.m[0])}`;
+if(!clusters.has(key)){
+clusters.set(key,{lat:s.m[1],lon:s.m[0],samples:[]});
+}
+clusters.get(key).samples.push(s);
+}
+console.log(`Clustered ${samples.length} samples into ${clusters.size} groups`);
+return Array.from(clusters.values());
 }
 
 // Layer management
@@ -786,7 +805,7 @@ layers.push(glow,core,hit);
 state.redLayer=L.layerGroup(layers).addTo(map);
 }
 
-// Particle system - optimized
+// Particle system
 const ParticleLayer=L.Layer.extend({
 onAdd:function(map){
 this._map=map;
@@ -1108,7 +1127,7 @@ clearTimeout(showOffline._t);
 showOffline._t=setTimeout(()=>{el.style.display='none'},6000);
 }
 
-// Main loading function
+// Main loading function - optimized
 async function loadCountry(country,preserveTime=false){
 if(state.abort)state.abort.abort();
 state.abort=new AbortController();
@@ -1136,14 +1155,26 @@ drawBorder();
 setProgress(28);
 state.samples=state.rings.flatMap(r=>sampleWind(r));
 setProgress(30);
-const total=state.samples.length||1;
+
+// Key optimization: cluster samples to reduce API calls
+const clusters=clusterSamples(state.samples);
+const total=clusters.length||1;
 const winds=await poolAll(
-state.samples,
-(s)=>cachedWind(s.m[1],s.m[0],signal),
+clusters,
+(cluster,i)=>cachedWind(cluster.lat,cluster.lon,signal),
 CFG.CONCUR,
 (completed)=>setProgress(30+(completed/total)*70)
 );
-state.samples.forEach((s,i)=>{s.wind=winds[i]});
+
+// Assign clustered wind data to all samples in each cluster
+let windIdx=0;
+for(const cluster of clusters){
+const wind=winds[windIdx++];
+for(const sample of cluster.samples){
+sample.wind=wind;
+}
+}
+
 if(!state.samples.some(s=>s.wind)){
 const c=COORDS[country]||{lat:54.7,lon:25.3};
 const fallback=await cachedWind(c.lat,c.lon,signal);
@@ -1189,51 +1220,43 @@ const timeDisplay = $('timeDisplay');
 const hourSlider = $('hour');
 const sliderContainer = document.querySelector('.slider-container');
 
-// Mobile and desktop event handling
 const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
-// Highlight clock when interacting with slider
 const addSelectingClass = () => timeDisplay.classList.add('selecting');
 const removeSelectingClass = () => timeDisplay.classList.remove('selecting');
 
 if (isMobile) {
-  // Touch events for mobile
-  hourSlider.addEventListener('touchstart', addSelectingClass, {passive: true});
-  hourSlider.addEventListener('touchend', removeSelectingClass, {passive: true});
-  hourSlider.addEventListener('touchcancel', removeSelectingClass, {passive: true});
-  
-  // Enhanced mobile slider interaction highlighting
-  hourSlider.addEventListener('input', () => {
-    timeDisplay.classList.add('selecting');
-    // Keep highlighting for a bit longer on mobile
-    setTimeout(() => {
-      if (!hourSlider.matches(':active')) {
-        timeDisplay.classList.remove('selecting');
-      }
-    }, 100);
-  });
-  
-  hourSlider.addEventListener('change', () => {
-    setTimeout(removeSelectingClass, 200);
-  });
+hourSlider.addEventListener('touchstart', addSelectingClass, {passive: true});
+hourSlider.addEventListener('touchend', removeSelectingClass, {passive: true});
+hourSlider.addEventListener('touchcancel', removeSelectingClass, {passive: true});
+
+hourSlider.addEventListener('input', () => {
+timeDisplay.classList.add('selecting');
+setTimeout(() => {
+if (!hourSlider.matches(':active')) {
+timeDisplay.classList.remove('selecting');
+}
+}, 100);
+});
+
+hourSlider.addEventListener('change', () => {
+setTimeout(removeSelectingClass, 200);
+});
 } else {
-  // Mouse events for desktop
-  hourSlider.addEventListener('mousedown', addSelectingClass);
-  hourSlider.addEventListener('mouseup', removeSelectingClass);
+hourSlider.addEventListener('mousedown', addSelectingClass);
+hourSlider.addEventListener('mouseup', removeSelectingClass);
 }
 
-// Highlight clock when hovering over slider area (desktop only)
 if (!isMobile) {
-  sliderContainer.addEventListener('mouseenter', () => {
-    timeDisplay.classList.add('hovering');
-  });
+sliderContainer.addEventListener('mouseenter', () => {
+timeDisplay.classList.add('hovering');
+});
 
-  sliderContainer.addEventListener('mouseleave', () => {
-    timeDisplay.classList.remove('hovering');
-  });
+sliderContainer.addEventListener('mouseleave', () => {
+timeDisplay.classList.remove('hovering');
+});
 }
 
-// Clean up on document events
 document.addEventListener('mouseup', removeSelectingClass);
 document.addEventListener('touchend', removeSelectingClass, {passive: true});
 }
@@ -1257,7 +1280,6 @@ document.addEventListener('visibilitychange',()=>{
 if(document.hidden)disclaimerToggling=false;
 });
 
-// Initialize enhanced time interactions
 setupTimeInteractions();
 }
 
